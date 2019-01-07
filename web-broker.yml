@@ -1,0 +1,15 @@
+mqtt:
+    protocol: ws
+    host: localhost
+    port: 9002
+nats:
+    host: localhost
+    port: 4222
+    rootTopic: "web1"
+logging:
+    level: silly
+    output : "web-broker.log"
+api:
+    port: 9003
+    
+        
