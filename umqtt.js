@@ -387,7 +387,7 @@ class umqtt {
             self.logger.warn(`Connection without associated clientId has been disconnected`)
             return
         }
-        self.clientDisconnect(conPkt.clientId)
+        self.clientDisconnect(conPkt)
         if (connObj[DISCONNECT_PACKET] === undefined) {
             self.logger.warn(`ClientId ${conPkt.clientId} connection has been closed without sending disconnect packet`)
             //delete self.clientList[conPkt.clientId]
