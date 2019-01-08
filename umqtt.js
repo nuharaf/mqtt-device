@@ -267,10 +267,8 @@ class umqtt {
         var self = this
         self.testconn = connObj
         self.logger.debug(`Connect attempt with clientId ${packet.clientId}`)
-        self.logger.debug(`Connect attempt keepalive : ${packet.keepalive}`)
-        //check if connection with same clientId already exist
-        var check = self.clientMap.has(packet.clientId)
-        //var check = self.clientList[packet.clientId] == undefined
+        self.logger.debug(`Connect attempt keepalive : ${packet.keepalive}`)        
+        var check = self.clientMap.has(packet.clientId)        
         if (!check) {
             //call user provided auth handler
             self.connectAuthenticate({
@@ -281,11 +279,10 @@ class umqtt {
                 if (res) {
                     //auth accepted
                     connObj.connack({ returnCode: 0 })
-                    //self.clientList[packet.clientId] = connObj
                     self.clientMap.set(packet.clientId,connObj)
                     connObj[CONNECT_PACKET] = packet
                     connObj[CONNECT_TIMESTAMP] = new Date() //attach timestamp
-                    connObj[PACKET_TIMESTAMP] = Date.now()                    
+                    connObj[PACKET_TIMESTAMP] = Date.now()         
                     self.connectHook()
                     self.logger.info(`ClientId ${packet.clientId} connect attempt accepted`)                    
                 }
