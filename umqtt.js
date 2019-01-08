@@ -25,6 +25,7 @@ class umqtt {
         this.connectAuthenticate = function (data, cb) { cb(true) }
         this.clientSubscribe = function (data, client, cb) { cb(true) }
         this.clientUnsubscribe = function (data, client) { }
+        this.clientDisconnect = function(client){}
         this.metric = {}
         this.metric.publishCounter = { inc: function () { } }
         this.metric.publishMessageHist = { observe: function () { } }
@@ -386,6 +387,7 @@ class umqtt {
             self.logger.warn(`Connection without associated clientId has been disconnected`)
             return
         }
+        self.clientDisconnect(conPkt.clientId)
         if (connObj[DISCONNECT_PACKET] === undefined) {
             self.logger.warn(`ClientId ${conPkt.clientId} connection has been closed without sending disconnect packet`)
             //delete self.clientList[conPkt.clientId]
