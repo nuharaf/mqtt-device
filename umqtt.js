@@ -21,18 +21,19 @@ class umqtt {
         this.host = opts.host
         this.logger = opts.logger
         this.timeout = opts.timeout ? opts.timeout : 10000
+        this.sameId = opts.sameId === "disconnect" ? "disconnect" : "prevent"
         this.clientPublish = function () { }
         this.connectAuthenticate = function (data, cb) { cb(true) }
         this.clientSubscribe = function (data, client, cb) { cb(true) }
         this.clientUnsubscribe = function (data, client) { }
-        this.clientDisconnect = function(client){}
+        this.clientDisconnect = function (client) { }
         this.metric = {}
         this.metric.publishCounter = { inc: function () { } }
         this.metric.publishMessageHist = { observe: function () { } }
         this.metric.activeClientGauge = { inc: function () { }, dec: function () { } }
         //this.clientList = {}
         this.clientMap = new Map()
-        this.connectHook = function(){}
+        this.connectHook = function () { }
     }
 
     setMetric(metrics) {
@@ -144,47 +145,73 @@ class umqtt {
         }.bind(self), time)
     }
 
-    _attachPurgerTrigger(){
-        var self = this        
-        self.connectHook = function(){
+    _attachPurgerTrigger() {
+        var self = this
+        self.connectHook = function () {
             self.logger.debug(`Purger scheduled`)
-            setTimeout(self._purger.bind(self),1000)
-            self.connectHook = function(){}
+            setTimeout(self._purger.bind(self), 1000)
+            self.connectHook = function () { }
         }
     }
 
-    _purger(){
+    _purger() {
         var self = this
         var smallestKeepalive = 1000
         self.logger.debug(`Running client purger`)
-        var count = self.clientMap.size;        
-        if(count == 0){
+        var count = self.clientMap.size;
+        if (count == 0) {
             self.logger.info(`No client to purge`)
             self._attachPurgerTrigger()
             return
         }
         var purgedCount = 0
-        async.each(self.clientMap.values(),function(conn,done){
+        let checkPacketOverdue = function(conn){
             let connPkt = conn[CONNECT_PACKET]
             let keepalive = connPkt.keepalive
-            if(keepalive < smallestKeepalive){
+            if (keepalive < smallestKeepalive) {
                 smallestKeepalive = keepalive
             }
             let lastMessage = conn[PACKET_TIMESTAMP]
             let now = Date.now()
-            if((lastMessage + 1500* keepalive) < now){
+            if ((lastMessage + 1500 * keepalive) < now) {
                 conn.end()
                 conn.destroy()
-                self.logger.info(`ClientId ${connPkt.clientId} purged, overdue by ${now - (lastMessage + 1000*keepalive)} miliseconds`)                
+                self.logger.info(`ClientId ${connPkt.clientId} purged, overdue by ${now - (lastMessage + 1000 * keepalive)} miliseconds`)
                 purgedCount++
             }
-            done()
-        },function(){
-            let newTimeout = smallestKeepalive == 1000? 10000:smallestKeepalive * 500            
-            self.logger.debug(`${purgedCount > 0? purgedCount :'No'} client purged from ${count} client`)     
-            self.logger.debug(`Reschedule client purging for the next ${newTimeout/1000} second`)
-            setTimeout(self._purger.bind(self),newTimeout)
-        })
+        }
+
+        let reschedule = function(){
+            let newTimeout = smallestKeepalive == 1000 ? 10000 : smallestKeepalive * 500
+            self.logger.debug(`${purgedCount > 0 ? purgedCount : 'No'} client purged from ${count} client`)
+            self.logger.debug(`Reschedule client purging for the next ${newTimeout / 1000} second`)
+            setTimeout(self._purger.bind(self), newTimeout)
+        }
+        for(let conn of self.clientMap.values()){
+            checkPacketOverdue(conn)
+        }
+        reschedule()
+        // async.each(self.clientMap.values(), function (conn, done) {
+        //     let connPkt = conn[CONNECT_PACKET]
+        //     let keepalive = connPkt.keepalive
+        //     if (keepalive < smallestKeepalive) {
+        //         smallestKeepalive = keepalive
+        //     }
+        //     let lastMessage = conn[PACKET_TIMESTAMP]
+        //     let now = Date.now()
+        //     if ((lastMessage + 1500 * keepalive) < now) {
+        //         conn.end()
+        //         conn.destroy()
+        //         self.logger.info(`ClientId ${connPkt.clientId} purged, overdue by ${now - (lastMessage + 1000 * keepalive)} miliseconds`)
+        //         purgedCount++
+        //     }
+        //     done()
+        // }, function () {
+        //     let newTimeout = smallestKeepalive == 1000 ? 10000 : smallestKeepalive * 500
+        //     self.logger.debug(`${purgedCount > 0 ? purgedCount : 'No'} client purged from ${count} client`)
+        //     self.logger.debug(`Reschedule client purging for the next ${newTimeout / 1000} second`)
+        //     setTimeout(self._purger.bind(self), newTimeout)
+        // })
     }
 
     run() {
@@ -205,7 +232,7 @@ class umqtt {
         }
         else if (self.protocol === "tls") {
             self.socketServer.on("secureConnection", self._handler.bind(self))
-        }        
+        }
         self._attachPurgerTrigger()
     }
 
@@ -268,40 +295,47 @@ class umqtt {
         var self = this
         self.testconn = connObj
         self.logger.debug(`Connect attempt with clientId ${packet.clientId}`)
-        self.logger.debug(`Connect attempt keepalive : ${packet.keepalive}`)        
-        var check = self.clientMap.has(packet.clientId)        
-        if (!check) {
-            //call user provided auth handler
-            self.connectAuthenticate({
-                clientId: packet.clientId,
-                username: packet.username,
-                password: packet.pasword
-            }, function (connObj, packet, res) {
-                if (res) {
-                    //auth accepted
-                    connObj.connack({ returnCode: 0 })
-                    self.clientMap.set(packet.clientId,connObj)
-                    connObj[CONNECT_PACKET] = packet
-                    connObj[CONNECT_TIMESTAMP] = new Date() //attach timestamp
-                    connObj[PACKET_TIMESTAMP] = Date.now()         
-                    self.connectHook()
-                    self.logger.info(`ClientId ${packet.clientId} connect attempt accepted`)                    
-                }
-                else {
-                    //auth rejected
-                    connObj.end()
-                    connObj.destroy()
-                    self.logger.debug(`ClientId ${packet.clientId} auth failed, disconnect client`)
-                }
-            }.bind(self, connObj, packet))
+        self.logger.debug(`Connect attempt keepalive : ${packet.keepalive}`)
+        var exist = self.clientMap.has(packet.clientId)
+        if (exist && self.sameId === "disconnect") {
+            //disconnect current connection
+            let connObj = self.clientMap.get(packet.clientId)
+            connObj.end()
+            connObj.destroy()
+            self.logger.debug(`Existing connection with clientid ${packet.clientId} evicted`)
         }
-        else {
+        else if (exist && self.sameId === "prevent") {
             //refuse connection with same clientId
             self.logger.warn(`Connection with clientId of ${packet.clientId} already exist`)
             self.logger.info(`ClientId ${packet.clientId} connect attempt rejected`)
             connObj.end()
             connObj.destroy()
+            return
         }
+        //call user provided auth handler
+        self.connectAuthenticate({
+            clientId: packet.clientId,
+            username: packet.username,
+            password: packet.pasword
+        }, function (connObj, packet, res) {
+            if (res) {
+                //auth accepted
+                connObj.connack({ returnCode: 0 })
+                self.clientMap.set(packet.clientId, connObj)
+                connObj[CONNECT_PACKET] = packet
+                connObj[CONNECT_TIMESTAMP] = new Date() //attach timestamp
+                connObj[PACKET_TIMESTAMP] = Date.now()
+                self.connectHook()
+                self.logger.info(`ClientId ${packet.clientId} connect attempt accepted`)
+            }
+            else {
+                //auth rejected
+                connObj.end()
+                connObj.destroy()
+                self.logger.debug(`ClientId ${packet.clientId} auth failed, disconnect client`)
+            }
+        }.bind(self, connObj, packet))
+
     }
 
     _onPublishHandler(connObj, packet) {
@@ -367,7 +401,7 @@ class umqtt {
     }
 
     _onErrorHandler(connObj) {
-        var self = this        
+        var self = this
         var conPkt = connObj[CONNECT_PACKET]
         connObj.destroy()
         if (conPkt === undefined) {
