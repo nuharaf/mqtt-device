@@ -165,7 +165,7 @@ class umqtt {
             return
         }
         var purgedCount = 0
-        let checkPacketOverdue = function(conn){
+        let checkPacketOverdue = function (conn) {
             let connPkt = conn[CONNECT_PACKET]
             let keepalive = connPkt.keepalive
             if (keepalive < smallestKeepalive) {
@@ -181,13 +181,13 @@ class umqtt {
             }
         }
 
-        let reschedule = function(){
+        let reschedule = function () {
             let newTimeout = smallestKeepalive == 1000 ? 10000 : smallestKeepalive * 500
             self.logger.debug(`${purgedCount > 0 ? purgedCount : 'No'} client purged from ${count} client`)
             self.logger.debug(`Reschedule client purging for the next ${newTimeout / 1000} second`)
             setTimeout(self._purger.bind(self), newTimeout)
         }
-        for(let conn of self.clientMap.values()){
+        for (let conn of self.clientMap.values()) {
             checkPacketOverdue(conn)
         }
         reschedule()
@@ -320,6 +320,14 @@ class umqtt {
         }, function (connObj, packet, res) {
             if (res) {
                 //auth accepted
+                if (self.clientMap.has(packet.clientId)) {
+                    //check again because clientMap might change before this handler called
+                    self.logger.warn(`Connection with clientId of ${packet.clientId} already exist`)
+                    self.logger.info(`ClientId ${packet.clientId} connect attempt rejected`)
+                    connObj.end();
+                    connObj.destroy();
+                    return;
+                }
                 connObj.connack({ returnCode: 0 })
                 self.clientMap.set(packet.clientId, connObj)
                 connObj[CONNECT_PACKET] = packet
