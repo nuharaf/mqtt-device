@@ -34,6 +34,8 @@ class umqtt {
         //this.clientList = {}
         this.clientMap = new Map()
         this.connectHook = function () { }
+
+        this.paused = false
     }
 
     setMetric(metrics) {
@@ -236,6 +238,10 @@ class umqtt {
         self._attachPurgerTrigger()
     }
 
+    pause(){
+        this.paused = true
+    }
+
     publish(clientId, message) {
         var self = this
         //var conn = self.clientList[clientId]
@@ -293,6 +299,9 @@ class umqtt {
 
     _onConnectHandler(connObj, packet) {
         var self = this
+        if (self.paused){
+            return
+        }
         self.testconn = connObj
         self.logger.debug(`Connect attempt with clientId ${packet.clientId}`)
         self.logger.debug(`Connect attempt keepalive : ${packet.keepalive}`)
