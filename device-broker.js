@@ -34,7 +34,10 @@ logger.add(new winston.transports.Console());
 var nats = require('nats')
 var nc = function () {
     try {
-        return nats.connect(`nats://${config.nats.host}:${config.nats.port}`)
+        return nats.connect({
+            url: `nats://${config.nats.host}:${config.nats.port}`,
+            maxReconnectAttempts: -1
+        })
     }
     catch (e) {
         logger.error("NATS connect failed")
@@ -47,24 +50,24 @@ nc.on("error", function () {
     process.exit()
 })
 
-nc.on('connect', function(nc) {
-	logger.info("NATS connected")
+nc.on('connect', function (nc) {
+    logger.info("NATS connected")
 });
 
-nc.on('disconnect', function() {
-	logger.warn("NATS disconnected")
+nc.on('disconnect', function () {
+    logger.warn("NATS disconnected")
 });
 
-nc.on('reconnecting', function() {
-	logger.info("NATS reconnecting")
+nc.on('reconnecting', function () {
+    logger.info("NATS reconnecting")
 });
 
-nc.on('reconnect', function(nc) {
-	logger.info("NATS reconnected")
+nc.on('reconnect', function (nc) {
+    logger.info("NATS reconnected")
 });
 
-nc.on('close', function() {
-	logger.info("NATS connection closed")
+nc.on('close', function () {
+    logger.info("NATS connection closed")
 });
 
 //setup mqtt server
@@ -73,14 +76,21 @@ var mqtt = new umqtt({
     port: config.mqtt.port,
     protocol: config.mqtt.protocol,
     host: config.mqtt.host,
+    sameId: config.mqtt.sameId,
     logger: logger
 })
 
 mqtt.clientPublish = function (packet, client) {
     const topic = packet.topic
+    let payload
+    try {
+        payload = JSON.parse(packet.payload.toString());
+    } catch (error) {
+        logger.error("Invalid JSON syntax")
+    }
 
     let data = {
-        topic: topic, payload: JSON.parse(packet.payload.toString()),
+        topic: topic, payload: payload,
         clientId: client.clientId, arrivalTimestamp: (new Date()).getTime()
     }
     if (packet.qos != 0) {
@@ -91,6 +101,10 @@ mqtt.clientPublish = function (packet, client) {
     nc.publish(`${config.nats.rootTopic}.clientPublish.${client.clientId}.${topic}`,
         JSON.stringify(data)
     )
+}
+
+mqtt.clientDisconnect = function (client) {
+    nc.publish(`${config.nats.rootTopic}.clientDisconnect.${client.clientId}`)
 }
 
 mqtt.setup(function () {
@@ -133,6 +147,23 @@ var mgmtapi = http.createServer(function (req, res) {
         }
         else {
             const stat = mqtt.disconnect(clientId)
+            res.end(stat.toString())
+        }
+    }
+    else if (req.method == 'GET' && urlobject.pathname === '/publish') {
+        let clientId = urlobject.query.clientId
+        let message = urlobject.query.message
+        let topic = urlobject.query.topic
+        if (message == undefined) {
+            message = ""
+        }
+        if (clientId === undefined) {
+            res.writeHead(404)
+            res.end()
+            return
+        }
+        else {
+            const stat = mqtt.publish(clientId, { topic: topic, payload: message })
             res.end(stat.toString())
         }
     }
