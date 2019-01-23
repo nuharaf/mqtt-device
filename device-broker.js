@@ -1,7 +1,12 @@
 'use strict'
 const yaml = require('js-yaml');
+const path = require('path');
 const fs = require('fs');
 const ymlPath = 'device-broker.yml'
+
+
+var scriptname = path.basename(process.argv[1])
+console.log(`Script name : ${scriptname}`)
 
 //Load configuration file
 const config = function () {
@@ -36,7 +41,8 @@ var nc = function () {
     try {
         return nats.connect({
             url: `nats://${config.nats.host}:${config.nats.port}`,
-            maxReconnectAttempts: -1
+            maxReconnectAttempts: -1,
+            name : scriptname
         })
     }
     catch (e) {

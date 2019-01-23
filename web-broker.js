@@ -1,8 +1,12 @@
 'use strict'
 const yaml = require('js-yaml');
+const path = require('path');
 const fs = require('fs');
 const ymlPath = 'web-broker.yml'
 var async = require("async");
+
+var scriptname = path.basename(process.argv[1])
+console.log(`Script name : ${scriptname}`)
 
 //Load configuration file
 const config = function () {
@@ -35,13 +39,42 @@ logger.add(new winston.transports.Console());
 var nats = require('nats')
 var nc = function () {
     try {
-        return nats.connect(`nats://${config.nats.host}:${config.nats.port}`)
+        return nats.connect({
+            url: `nats://${config.nats.host}:${config.nats.port}`,
+            maxReconnectAttempts: -1,
+            name : scriptname
+        })
     }
     catch{
-        console.error("Unable to connect to nats server")
+        logger.error("NATS connect failed")
         process.exit()
     }
 }.call()
+
+nc.on("error", function () {
+    logger.error("NATS connection error")
+    process.exit()
+})
+
+nc.on('connect', function (nc) {
+    logger.info("NATS connected")
+});
+
+nc.on('disconnect', function () {
+    logger.warn("NATS disconnected")
+});
+
+nc.on('reconnecting', function () {
+    logger.info("NATS reconnecting")
+});
+
+nc.on('reconnect', function (nc) {
+    logger.info("NATS reconnected")
+});
+
+nc.on('close', function () {
+    logger.info("NATS connection closed")
+});
 
 var subscriptionList = {}
 
@@ -52,22 +85,32 @@ var mqtt = new umqtt({
     port: config.mqtt.port,
     protocol: config.mqtt.protocol,
     host: config.mqtt.host,
-    logger: logger
+    logger: logger,
+    sameId: "disconnect"
 })
 
+function onMessage(subscriber, topic, msg) {
+    async.each(subscriber, function (client, done) {
+        const mqttmsg = { topic: topic, payload: msg }
+        mqtt.publish(client, mqttmsg)
+        done()
+    })
+}
+
 mqtt.clientSubscribe = function (topic, client, done) {
-    let topic = subscriptionList.topic
-    if (topic === undefined) {
-        topic = { subscriber: new Set() }
-        topic.subscriber.add(client.clientId)
-        topic.sid = nc.subscribe(`${config.nats.rootTopic}.${topic}`, function (msg) {
-            async.each(topic.subscriber, function (client, done) {
-                const mqttmsg = {topic: topic, payload: msg }
-                mqtt.publish(client, mqttmsg)
-                done()
-            })
-        })
-        subscriptionList.topic = topic
+    let topic_member = subscriptionList[topic]
+    let natsTopic = config.topic_mapping[topic]
+    if (natsTopic == undefined) {
+        logger.error("Topic not in mapping")
+        done(false)
+        return
+    }
+    if (topic_member === undefined) {
+        topic_member = { subscriber: new Set() }
+        topic_member.subscriber.add(client.clientId)
+        topic_member.sid = nc.subscribe(`${natsTopic}`,
+            onMessage.bind(this, topic_member.subscriber, topic))
+        subscriptionList.topic = topic_member
     }
     else {
         topic.subscriber.add(client.clientId)
@@ -83,6 +126,12 @@ mqtt.clientUnsubscribe = function (topic, client) {
             nc.unsubscribe(topic.sid)
             delete subscriptionList.topic
         }
+    }
+}
+
+mqtt.clientDisconnect = function (client) {
+    for (let topic in subscriptionList.topic) {
+        topic.delete(client.clientId)
     }
 }
 
