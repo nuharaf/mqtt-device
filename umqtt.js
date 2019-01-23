@@ -57,8 +57,8 @@ class umqtt {
             else {
                 info.socket = this._socketGetTuple(conn.stream)
             }
-            //clients[key] = info            
-            clients[conn[CONNECT_PACKET.clientId]] = info
+            //clients[key] = info          
+            clients[conn[CONNECT_PACKET].clientId] = info
         }
         return clients
     }
