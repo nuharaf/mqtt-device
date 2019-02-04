@@ -42,7 +42,7 @@ var nc = function () {
         return nats.connect({
             url: `nats://${config.nats.host}:${config.nats.port}`,
             maxReconnectAttempts: -1,
-            name : scriptname
+            name: scriptname
         })
     }
     catch (e) {
@@ -179,4 +179,4 @@ var mgmtapi = http.createServer(function (req, res) {
     }
 })
 
-mgmtapi.listen(config.api.port)
+mgmtapi.listen({ host: "127.0.0.1", port: config.api.port })
