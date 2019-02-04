@@ -42,7 +42,7 @@ var nc = function () {
         return nats.connect({
             url: `nats://${config.nats.host}:${config.nats.port}`,
             maxReconnectAttempts: -1,
-            name : scriptname
+            name: scriptname
         })
     }
     catch{
@@ -76,7 +76,7 @@ nc.on('close', function () {
     logger.info("NATS connection closed")
 });
 
-var subscriptionList = {}
+var subscriptionList = new Map()
 
 
 //setup mqtt server
@@ -98,40 +98,48 @@ function onMessage(subscriber, topic, msg) {
 }
 
 mqtt.clientSubscribe = function (topic, client, done) {
-    let topic_member = subscriptionList[topic]
     let natsTopic = config.topic_mapping[topic]
     if (natsTopic == undefined) {
         logger.error("Topic not in mapping")
         done(false)
         return
     }
-    if (topic_member === undefined) {
-        topic_member = { subscriber: new Set() }
+    logger.info(`topic ${topic} mapped to ${natsTopic}`)
+    if (!subscriptionList.has(topic)) {
+        let topic_member = { subscriber: new Set() }
         topic_member.subscriber.add(client.clientId)
         topic_member.sid = nc.subscribe(`${natsTopic}`,
             onMessage.bind(this, topic_member.subscriber, topic))
-        subscriptionList.topic = topic_member
+        subscriptionList.set(topic,topic_member)
     }
     else {
-        topic.subscriber.add(client.clientId)
+        subscriptionList.get(topic).subscriber.add(client.clientId)
     }
     done(true)
 }
 
 mqtt.clientUnsubscribe = function (topic, client) {
-    let topic = subscriptionList.topic
-    if (topic !== undefined) {
-        topic.subscriber.delete(client.clientId)
-        if (topic.subscriber.size === 0) {
-            nc.unsubscribe(topic.sid)
-            delete subscriptionList.topic
+    if (subscriptionList.has(topic)) {
+        let topic_member = subscriptionList.get(topic)
+        topic_member.subscriber.delete(client.clientId)
+        logger.info(`delete ${client.clientId} from ${topic}`)
+        if (topic_member.subscriber.size === 0) {
+            nc.unsubscribe(topic_member.sid)
+            subscriptionList.delete(topic)
+            logger.info(`delete ${topic} from subscription list`)
         }
     }
 }
 
 mqtt.clientDisconnect = function (client) {
-    for (let topic in subscriptionList.topic) {
-        topic.delete(client.clientId)
+    for (let [topic,topic_member] of subscriptionList) {
+        if (topic_member.subscriber.has(client.clientId)) {
+            topic_member.subscriber.delete(client.clientId)
+            if (topic_member.subscriber.size === 0) {
+                nc.unsubscribe(topic_member.sid)
+                subscriptionList.delete(topic)
+            }
+        }
     }
 }
 
@@ -166,7 +174,11 @@ var mgmtapi = http.createServer(function (req, res) {
         res.writeHead(200, {
             'Content-Type': 'application/json'
         });
-        res.end(JSON.stringify(subscriptionList))
+        var subs = {}
+        for (let [key,value] of subscriptionList){
+            subs[key] = [...value.subscriber]
+        }
+        res.end(JSON.stringify(subs))
     }
     else {
         res.writeHead(404)

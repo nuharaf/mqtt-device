@@ -244,7 +244,7 @@ class umqtt {
 
     publish(clientId, message) {
         var self = this
-        //var conn = self.clientList[clientId]
+        self.logger.silly(`Publish message with topic ${message.topic} to ${clientId}`)
         var conn = self.clientMap.get(clientId)
         if (conn == undefined) {
             self.logger.warn(`ClientId ${clientId} not connected`)
@@ -359,7 +359,7 @@ class umqtt {
         var self = this
         var conPkt = connObj[CONNECT_PACKET]
         if (conPkt !== undefined) {
-            self.logger.debug(`Published message from ${conPkt.clientId} with topic ${packet.topic}, length : ${packet.payload.length}`)
+            self.logger.silly(`Published message from ${conPkt.clientId} with topic ${packet.topic}, length : ${packet.payload.length}`)
             //call user provided handle
             self.clientPublish(packet, conPkt)
             connObj[PACKET_TIMESTAMP] = Date.now()
@@ -397,9 +397,10 @@ class umqtt {
     _onUnsubscribeHandler(connObj, packet) {
         var self = this
         var conPkt = connObj[CONNECT_PACKET]
-        if (client !== undefined) {
-            self.logger.debug(`Receive unsubscribe request from ${client.clientId} with topic ${packet.unsubscriptions[0].topic}`)
+        if (conPkt !== undefined) {
+            self.logger.debug(`Receive unsubscribe request from ${conPkt.clientId} with topic ${packet.unsubscriptions[0]}`)
             self.clientUnsubscribe(packet.unsubscriptions[0], conPkt)
+            connObj.unsuback({messageId: packet.messageId })
         }
     }
 

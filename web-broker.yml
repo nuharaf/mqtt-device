@@ -7,9 +7,15 @@ nats:
     port: 4222
     rootTopic: "web1"
 logging:
-    level: silly
+    level: debug
     output : "web-broker.log"
 api:
     port: 9003
+topic_mapping:
+    all: analytic.pipeline0.all
+    groupa: analytic.pipeline1.groupa
+    titik0: analytic.pipeline2.titik0
+    distance: analytic.pipeline3.collectivedistance
+
     
         

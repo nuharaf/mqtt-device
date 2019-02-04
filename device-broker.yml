@@ -1,13 +1,14 @@
 mqtt:
-    protocol: tcp
+    protocol: ws
     host: 0.0.0.0
     port: 9000
+    sameId: prevent
 nats:
     host: localhost
     port: 4222
     rootTopic: "tenant1"
 logging:
-    level: silly
+    level: info
     output : "device-broker.log"
 api:
     port: 9001
