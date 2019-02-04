@@ -110,7 +110,7 @@ mqtt.clientSubscribe = function (topic, client, done) {
         topic_member.subscriber.add(client.clientId)
         topic_member.sid = nc.subscribe(`${natsTopic}`,
             onMessage.bind(this, topic_member.subscriber, topic))
-        subscriptionList.set(topic,topic_member)
+        subscriptionList.set(topic, topic_member)
     }
     else {
         subscriptionList.get(topic).subscriber.add(client.clientId)
@@ -132,7 +132,7 @@ mqtt.clientUnsubscribe = function (topic, client) {
 }
 
 mqtt.clientDisconnect = function (client) {
-    for (let [topic,topic_member] of subscriptionList) {
+    for (let [topic, topic_member] of subscriptionList) {
         if (topic_member.subscriber.has(client.clientId)) {
             topic_member.subscriber.delete(client.clientId)
             if (topic_member.subscriber.size === 0) {
@@ -175,7 +175,7 @@ var mgmtapi = http.createServer(function (req, res) {
             'Content-Type': 'application/json'
         });
         var subs = {}
-        for (let [key,value] of subscriptionList){
+        for (let [key, value] of subscriptionList) {
             subs[key] = [...value.subscriber]
         }
         res.end(JSON.stringify(subs))
@@ -186,4 +186,4 @@ var mgmtapi = http.createServer(function (req, res) {
     }
 })
 
-mgmtapi.listen(config.api.port)
+mgmtapi.listen({ host: "127.0.0.1", port: config.api.port })
