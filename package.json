@@ -1,0 +1,24 @@
+{
+  "name": "mqtt-shim",
+  "version": "1.0.0",
+  "description": "",
+  "main": "fp.js",
+  "dependencies": {
+    "async": "^2.6.1",
+    "hapi": "^18.0.0",
+    "hapi-cors-headers": "^1.0.3",
+    "js-yaml": "^3.12.0",
+    "lodash": "^4.17.11",
+    "mqtt": "^2.18.8",
+    "mqtt-connection": "^4.0.0",
+    "nats": "^1.0.1",
+    "websocket-stream": "^5.1.2",
+    "winston": "^3.1.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
