@@ -292,6 +292,7 @@ class umqtt {
 
     _wsGetInfo(req) {
         return {
+            xrealip : req.headers['x-real-ip'],
             XFF: req.headers['x-forwarded-for'],
             Host: req.headers['host'],
             Url: req.url
