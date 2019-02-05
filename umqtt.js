@@ -226,6 +226,7 @@ class umqtt {
             self.websocketServer.on("connection", function (ws, req) {
                 var stream = websocketStream(ws)
                 stream[WS_REQUEST] = req
+                self.logger.silly(req.headers)
                 self._handler(stream)
             }.bind(self))
         }
