@@ -4,7 +4,7 @@ var fs = require('fs')
 var logger = { silly: console.log, trace: console.log, info: console.log, debug: console.log, warn: console.log, error: console.log }
 
 var myserver = new umqtt({
-    port: 9010, protocol: 'ws',timeout:1000000 , host: "0.0.0.0", logger: logger
+    host: "localhost", port: 9010, protocol: 'ws', timeout: 1000000, host: "0.0.0.0", logger: logger
 })
 
 myserver.connectAuthenticate = function (data, done) {
@@ -13,11 +13,9 @@ myserver.connectAuthenticate = function (data, done) {
 
 myserver.clientPublish = function (data, client) {
     if (data.qos == 1) {
-        setTimeout(function(){
-            if(!myserver.puback(client.clientId, data.messageId)){
-            }
-        },1000)
-        
+        if (!myserver.puback(client.clientId, data.messageId)) {
+            console.log('send puback')
+        }
     }
 
 }
