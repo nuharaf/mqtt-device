@@ -1,14 +1,10 @@
 var umqtt = require('./umqtt')
 var fs = require('fs')
 
-cert = fs.readFileSync("selfsigned2.crt")
-key = fs.readFileSync("selfsigned2.key")
-
 var logger = { silly: console.log, trace: console.log, info: console.log, debug: console.log, warn: console.log, error: console.log }
 
 var myserver = new umqtt({
-    port: 9000, protocol: 'ws', protocolOpts: { key: key, cert: cert }
-    , host: "localhost", logger: logger
+    port: 9010, protocol: 'ws',timeout:1000000 , host: "0.0.0.0", logger: logger
 })
 
 myserver.connectAuthenticate = function (data, done) {
