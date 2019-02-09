@@ -158,7 +158,7 @@ class umqtt {
 
     _purger() {
         var self = this
-        var smallestKeepalive = 1000
+        var smallestKeepalive = undefined
         self.logger.debug(`Running client purger`)
         var count = self.clientMap.size;
         if (count == 0) {
@@ -170,7 +170,10 @@ class umqtt {
         let checkPacketOverdue = function (conn) {
             let connPkt = conn[CONNECT_PACKET]
             let keepalive = connPkt.keepalive
-            if (keepalive < smallestKeepalive) {
+            if(smallestKeepalive == undefined){
+                smallestKeepalive = keepalive
+            }
+            else if (keepalive < smallestKeepalive){
                 smallestKeepalive = keepalive
             }
             let lastMessage = conn[PACKET_TIMESTAMP]
@@ -184,7 +187,7 @@ class umqtt {
         }
 
         let reschedule = function () {
-            let newTimeout = smallestKeepalive == 1000 ? 10000 : smallestKeepalive * 500
+            let newTimeout = smallestKeepalive == undefined ? 10000 : smallestKeepalive * 500
             self.logger.debug(`${purgedCount > 0 ? purgedCount : 'No'} client purged from ${count} client`)
             self.logger.debug(`Reschedule client purging for the next ${newTimeout / 1000} second`)
             setTimeout(self._purger.bind(self), newTimeout)
