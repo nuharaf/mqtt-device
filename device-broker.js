@@ -86,8 +86,25 @@ var mqtt = new umqtt({
     logger: logger
 })
 
-mqtt.clientPublish = function (packet, client) {
+mqtt.connectAuthenticate = function(regex,delimiter,client,done){
+    for (let segment of client.clientId.split(delimiter)){
+        if(!segment.match(regex)){
+            done(false)
+            logger.error(`Invalid clientId format : ${client.clientId}`)
+            return
+        }
+    }
+    done(true)
+}.bind(this,new RegExp('^[a-zA-Z0-9-_]+$'),".")
+
+mqtt.clientPublish = function (regex,delimiter,packet, client) {
     const topic = packet.topic
+    for (let segment of topic.split(delimiter)){
+        if(!segment.match(regex)){
+            logger.error(`Invalid topic format : ${topic}`)
+            return
+        }
+    }
     let payload
     try {
         payload = JSON.parse(packet.payload.toString());
@@ -107,11 +124,13 @@ mqtt.clientPublish = function (packet, client) {
     nc.publish(`${config.nats.rootTopic}.clientPublish.${client.clientId}.${topic}`,
         JSON.stringify(data)
     )
-}
+}.bind(this,new RegExp('^[a-zA-Z0-9-_]+$'),".")
 
 mqtt.clientDisconnect = function (client) {
     nc.publish(`${config.nats.rootTopic}.clientDisconnect.${client.clientId}`)
 }
+
+
 
 mqtt.setup(function () {
     mqtt.run()
