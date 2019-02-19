@@ -9,12 +9,9 @@ var scriptname = path.basename(process.argv[1])
 console.log(`Script name : ${scriptname}`)
 
 //Load configuration file
-const config = function () {
+const rawConfig = function () {
     try {
         const config = yaml.safeLoad(fs.readFileSync(ymlPath, 'utf8'));
-        const indentedJson = JSON.stringify(config, null, 4);
-        console.log("Your config file is as follow : ")
-        console.log(indentedJson);
         return config
     }
     catch{
@@ -40,7 +37,7 @@ const schema = Joi.object().keys({
     acl: Joi.object().keys({
         connect: Joi.string(),
         publish: Joi.string()
-    }).required(),
+    }).empty(null).default({}),
     logging: Joi.object().keys({
         level: Joi.string().required().valid("error", "warn", "info", "verbose", "debug", "silly"),
         output: Joi.string().required()
@@ -49,14 +46,20 @@ const schema = Joi.object().keys({
         port: Joi.number().port().required()
     })
 })
-
-Joi.validate(config, schema, function (err, value) {
+var config
+Joi.validate(rawConfig, schema, function (err, value) {
     if (err) {
         console.log("Invalid config")
         console.log(err)
         process.exit()
     }
+    config = value
+
 })
+const indentedJson = JSON.stringify(config, null, 4);
+console.log("Your config file is as follow : ")
+console.log(indentedJson);
+
 
 //Setup logging
 var winston = require('winston')
@@ -161,7 +164,7 @@ mqtt.connectAuthenticate = function (regex, delimiter, client, done) {
 
 //set callback when client publish message
 var LRU = require("lru-cache")
-aclPublishCache = new LRU(500)
+var aclPublishCache = new LRU(500)
 mqtt.clientPublish = function (regex, delimiter, packet, client) {
     const topic = packet.topic
     for (let segment of topic.split(delimiter)) {
@@ -195,8 +198,8 @@ mqtt.clientPublish = function (regex, delimiter, packet, client) {
     const aclKey = `${client.clientId}+${packet.topic}`
     if (config.acl.publish != undefined) {
         //check cache
-        if (aclPublishCache.get(aclKey) == undefined) {
-            //invoke permission request check
+        if (aclPublishCache.get(aclKey) == undefined) {//cache miss
+            //invoke permission check
             nc.requestOne(config.acl.publish, JSON.stringify({ clientId: client.clientId, topic: packet.topic }),
                 {}, 1000, function (response) {
                     if (response instanceof nats.NatsError && response.code === nats.REQ_TIMEOUT) {
@@ -213,7 +216,7 @@ mqtt.clientPublish = function (regex, delimiter, packet, client) {
                     return;
                 })
         }
-        else {
+        else {//cache hit
             if (aclPublishCache.get(aclKey)) {
                 forward()
             }
@@ -286,6 +289,17 @@ var mgmtapi = http.createServer(function (req, res) {
             const stat = mqtt.publish(clientId, { topic: topic, payload: message })
             res.end(stat.toString())
         }
+    }
+    else if (req.method == 'GET' && urlobject.pathname === '/cache') {
+        let cache = {}
+        aclPublishCache.forEach(function (value, key) {
+            cache[key] = value
+        })
+        res.writeHead(200, {
+            'Content-Type': 'application/json'
+        });
+        res.end(JSON.stringify(cache))
+
     }
     else {
         res.writeHead(404)
