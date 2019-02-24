@@ -9,12 +9,9 @@ var scriptname = path.basename(process.argv[1])
 console.log(`Script name : ${scriptname}`)
 
 //Load configuration file
-const config = function () {
+const rawConfig = function () {
     try {
         const config = yaml.safeLoad(fs.readFileSync(ymlPath, 'utf8'));
-        const indentedJson = JSON.stringify(config, null, 4);
-        console.log("Your config file is as follow : ")
-        console.log(indentedJson);
         return config
     }
     catch{
@@ -22,6 +19,47 @@ const config = function () {
         process.exit()
     }
 }.call()
+
+//verify config
+const Joi = require('joi');
+const schema = Joi.object().keys({
+    mqtt: Joi.object().keys({
+        protocol: Joi.string().required().valid("tcp", "tls", "ws", "wss"),
+        host: Joi.string().required(),
+        port: Joi.number().port().required()
+    }).required(),
+    nats: Joi.object().keys({
+        host: Joi.string().required(),
+        port: Joi.number().port().required(),
+        rootTopic: Joi.string().alphanum().required(),
+    }).required(),
+    acl: Joi.object().keys({
+        connect: Joi.string(),
+        subscribe: Joi.string()
+    }).empty(null).default({}),
+    logging: Joi.object().keys({
+        level: Joi.string().required().valid("error", "warn", "info", "verbose", "debug", "silly"),
+        output: Joi.string().required()
+    }).required(),
+    api: Joi.object().keys({
+        port: Joi.number().port().required()
+    }),
+    
+})
+
+var config
+Joi.validate(rawConfig, schema, function (err, value) {
+    if (err) {
+        console.log("Invalid config")
+        console.log(err)
+        process.exit()
+    }
+    config = value
+
+})
+const indentedJson = JSON.stringify(config, null, 4);
+console.log("Your config file is as follow : ")
+console.log(indentedJson);
 
 var winston = require('winston')
 

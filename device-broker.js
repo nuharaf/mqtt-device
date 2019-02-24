@@ -34,9 +34,9 @@ const schema = Joi.object().keys({
         port: Joi.number().port().required(),
         rootTopic: Joi.string().alphanum().required(),
     }).required(),
-    acl: Joi.object().keys({
-        connect: Joi.string(),
-        publish: Joi.string()
+    service: Joi.object().keys({
+        connect_authz: Joi.string(),
+        publish_authz: Joi.string()
     }).empty(null).default({}),
     logging: Joi.object().keys({
         level: Joi.string().required().valid("error", "warn", "info", "verbose", "debug", "silly"),
@@ -134,9 +134,9 @@ mqtt.connectAuthenticate = function (regex, delimiter, client, done) {
         }
     }
 
-    //if acl connect topic specified, call it
-    if (config.acl.connect != undefined) {
-        nc.requestOne(config.acl.connect, JSON.stringify(client), {}, 1000, function (response) {
+    //if  connect_authz service specified, call it
+    if (config.service.connect_authz != undefined) {
+        nc.requestOne(config.service.connect_authz, JSON.stringify(client), {}, 1000, function (response) {
             if (response instanceof nats.NatsError && response.code === nats.REQ_TIMEOUT) {
                 done(false)
                 return;
@@ -196,11 +196,11 @@ mqtt.clientPublish = function (regex, delimiter, packet, client) {
     }
 
     const aclKey = `${client.clientId}+${packet.topic}`
-    if (config.acl.publish != undefined) {
+    if (config.service.publish_authz != undefined) {
         //check cache
         if (aclPublishCache.get(aclKey) == undefined) {//cache miss
             //invoke permission check
-            nc.requestOne(config.acl.publish, JSON.stringify({ clientId: client.clientId, topic: packet.topic }),
+            nc.requestOne(config.service.publish_authz, JSON.stringify({ clientId: client.clientId, topic: packet.topic }),
                 {}, 1000, function (response) {
                     if (response instanceof nats.NatsError && response.code === nats.REQ_TIMEOUT) {
                         return;
