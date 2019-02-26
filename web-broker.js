@@ -25,26 +25,28 @@ const Joi = require('joi');
 const schema = Joi.object().keys({
     mqtt: Joi.object().keys({
         protocol: Joi.string().required().valid("tcp", "tls", "ws", "wss"),
-        host: Joi.string().required(),
+        host: Joi.string().ip().required(),
         port: Joi.number().port().required()
     }).required(),
     nats: Joi.object().keys({
-        host: Joi.string().required(),
+        host: Joi.string().ip().required(),
         port: Joi.number().port().required(),
-        rootTopic: Joi.string().alphanum().required(),
+        subscribe_mapping: Joi.string()
     }).required(),
-    acl: Joi.object().keys({
-        connect: Joi.string(),
-        subscribe: Joi.string()
+    service: Joi.object().keys({
+        connect_authz: Joi.string(),
+        subscribe_authz: Joi.string(),
+        topic_mapping: Joi.string()
     }).empty(null).default({}),
     logging: Joi.object().keys({
         level: Joi.string().required().valid("error", "warn", "info", "verbose", "debug", "silly"),
         output: Joi.string().required()
     }).required(),
     api: Joi.object().keys({
-        port: Joi.number().port().required()
+        port: Joi.number().port().required(),
+        host: Joi.string().ip().required()
     }),
-    
+
 })
 
 var config
@@ -57,9 +59,9 @@ Joi.validate(rawConfig, schema, function (err, value) {
     config = value
 
 })
-const indentedJson = JSON.stringify(config, null, 4);
-console.log("Your config file is as follow : ")
-console.log(indentedJson);
+const stringifyObject = require('stringify-object');
+console.log(stringifyObject(config))
+var subscribe_mapping = eval(config.nats.subscribe_mapping)
 
 var winston = require('winston')
 
@@ -136,38 +138,69 @@ function onMessage(subscriber, topic, msg) {
 }
 
 mqtt.clientSubscribe = function (topic, client, done) {
-    let natsTopic = config.topic_mapping[topic]
-    if (natsTopic == undefined) {
-        logger.error("Topic not in mapping")
+    let natsTopic = subscribe_mapping(client.clientId,topic)
+    if(natsTopic == ""){
         done(false)
         return
     }
     logger.info(`topic ${topic} mapped to ${natsTopic}`)
-    if (!subscriptionList.has(topic)) {
+    if (!subscriptionList.has(natsTopic)) {
         let topic_member = { subscriber: new Set() }
         topic_member.subscriber.add(client.clientId)
         topic_member.sid = nc.subscribe(`${natsTopic}`,
             onMessage.bind(this, topic_member.subscriber, topic))
-        subscriptionList.set(topic, topic_member)
+        subscriptionList.set(natsTopic, topic_member)
     }
     else {
-        subscriptionList.get(topic).subscriber.add(client.clientId)
+        subscriptionList.get(natsTopic).subscriber.add(client.clientId)
     }
     done(true)
 }
 
 mqtt.clientUnsubscribe = function (topic, client) {
-    if (subscriptionList.has(topic)) {
-        let topic_member = subscriptionList.get(topic)
+    let natsTopic = subscribe_mapping(client.clientId,topic)
+    if (subscriptionList.has(natsTopic)) {
+        let topic_member = subscriptionList.get(natsTopic)
         topic_member.subscriber.delete(client.clientId)
-        logger.info(`delete ${client.clientId} from ${topic}`)
+        logger.info(`delete ${client.clientId} from ${natsTopic}`)
         if (topic_member.subscriber.size === 0) {
             nc.unsubscribe(topic_member.sid)
-            subscriptionList.delete(topic)
-            logger.info(`delete ${topic} from subscription list`)
+            subscriptionList.delete(natsTopic)
+            logger.info(`delete ${natsTopic} from subscription list`)
         }
     }
 }
+
+//set callback when client attempt to connect
+mqtt.connectAuthenticate = function (client, done) {
+    //if  connect_authz service specified, call it
+    if (config.service.connect_authz != undefined) {
+        nc.requestOne(config.service.connect_authz, JSON.stringify(client), {}, 1000, function (response) {
+            if (response instanceof nats.NatsError && response.code === nats.REQ_TIMEOUT) {
+                done(false)
+                return;
+            }
+            try {
+                const res = JSON.parse(response)
+                if (res.status == 'OK') {
+                    done(true)
+                }
+                else {
+                    done(false)
+                }
+            } catch (error) {
+                done(false)
+            }
+            return;
+        })
+    }
+    else {
+        //or else just approve the conenction request
+        done(true)
+        return
+    }
+
+}.bind(this)
 
 mqtt.clientDisconnect = function (client) {
     for (let [topic, topic_member] of subscriptionList) {
@@ -224,4 +257,4 @@ var mgmtapi = http.createServer(function (req, res) {
     }
 })
 
-mgmtapi.listen({ host: "127.0.0.1", port: config.api.port })
+mgmtapi.listen({ host: config.api.host, port: config.api.port })

@@ -309,6 +309,14 @@ class umqtt {
         }
         self.testconn = connObj
         self.logger.debug(`Connect attempt with clientId ${packet.clientId}`)
+        if(packet.clientId == ""){
+            self.logger.error(`ClientId empty`)
+            return
+        }
+        if(packet.keepalive == 0){
+            self.logger.error(`Keepalive set to zero`)
+            return
+        }
         self.logger.debug(`Connect attempt keepalive : ${packet.keepalive}`)
         var exist = self.clientMap.has(packet.clientId)
         if (exist && self.sameId === "disconnect") {
@@ -330,7 +338,7 @@ class umqtt {
         self.connectAuthenticate({
             clientId: packet.clientId,
             username: packet.username,
-            password: packet.pasword
+            password: packet.password
         }, function (connObj, packet, res) {
             if (res) {
                 //auth accepted

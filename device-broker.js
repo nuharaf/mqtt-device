@@ -25,14 +25,15 @@ const Joi = require('joi');
 const schema = Joi.object().keys({
     mqtt: Joi.object().keys({
         protocol: Joi.string().required().valid("tcp", "tls", "ws", "wss"),
-        host: Joi.string().required(),
+        host: Joi.string().ip().required(),
         port: Joi.number().port().required(),
         sameId: Joi.string().required().valid("prevent", "disconnect")
     }).required(),
     nats: Joi.object().keys({
-        host: Joi.string().required(),
+        host: Joi.string().ip().required(),
         port: Joi.number().port().required(),
-        rootTopic: Joi.string().alphanum().required(),
+        publish_mapping: Joi.string().required(),
+        timestamp: Joi.boolean().default(false)
     }).required(),
     service: Joi.object().keys({
         connect_authz: Joi.string(),
@@ -43,7 +44,8 @@ const schema = Joi.object().keys({
         output: Joi.string().required()
     }).required(),
     api: Joi.object().keys({
-        port: Joi.number().port().required()
+        port: Joi.number().port().required(),
+        host: Joi.string().ip().required()
     })
 })
 var config
@@ -56,10 +58,10 @@ Joi.validate(rawConfig, schema, function (err, value) {
     config = value
 
 })
-const indentedJson = JSON.stringify(config, null, 4);
-console.log("Your config file is as follow : ")
-console.log(indentedJson);
 
+const stringifyObject = require('stringify-object');
+console.log(stringifyObject(config))
+var publish_mapping = eval(config.nats.publish_mapping)
 
 //Setup logging
 var winston = require('winston')
@@ -133,7 +135,6 @@ mqtt.connectAuthenticate = function (regex, delimiter, client, done) {
             return
         }
     }
-
     //if  connect_authz service specified, call it
     if (config.service.connect_authz != undefined) {
         nc.requestOne(config.service.connect_authz, JSON.stringify(client), {}, 1000, function (response) {
@@ -183,16 +184,19 @@ mqtt.clientPublish = function (regex, delimiter, packet, client) {
         }
         let data = {
             topic: topic, payload: payload,
-            clientId: client.clientId, arrivalTimestamp: (new Date()).getTime()
+            clientId: client.clientId
+        }
+        if (config.nats.timestamp) {
+            data.arrivalTimestamp = (new Date()).getTime()
         }
         if (packet.qos != 0) {
             data.qos = packet.qos
             data.messageId = packet.messageId
         }
         if (packet.dup) { data.dup = true }
-        nc.publish(`${config.nats.rootTopic}.clientPublish.${client.clientId}.${topic}`,
-            JSON.stringify(data)
-        )
+        let nats_topic = publish_mapping(client.clientId, topic)
+        if (nats_topic == "") { return }
+        nc.publish(nats_topic, JSON.stringify(data))
     }
 
     const aclKey = `${client.clientId}+${packet.topic}`
@@ -221,6 +225,9 @@ mqtt.clientPublish = function (regex, delimiter, packet, client) {
                 forward()
             }
         }
+    }
+    else {
+        forward()
     }
 
 }.bind(this, new RegExp('^[a-zA-Z0-9-_]+$'), ".")
@@ -307,4 +314,4 @@ var mgmtapi = http.createServer(function (req, res) {
     }
 })
 
-mgmtapi.listen({ host: "127.0.0.1", port: config.api.port })
+mgmtapi.listen({ host: config.api.host, port: config.api.port })

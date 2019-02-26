@@ -1,20 +1,23 @@
 mqtt:
     protocol: ws
-    host: localhost
+    host: 127.0.0.1
     port: 9000
     sameId: prevent
     #sameId: prevent
 nats:
-    host: localhost
+    host: 127.0.0.1
     port: 4222
-    rootTopic: "tenant1"
-acl:
-    #connect: "device.connect"
-    #publish: "device.publish"
+    publish_mapping : |
+        (clientId,topic)=> `tenant1.clientPublish.${clientId.split(".")[0]}`
+    #timestamp : true
+service:
+    #connect_authz: "device.connect"
+    #publish_authz: "device.publish"
 logging:
     level: silly
     output : "device-broker.log"
 api:
+    host: 127.0.0.1
     port: 9001
     
         
