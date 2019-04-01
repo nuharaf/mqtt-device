@@ -1,15 +1,17 @@
 mqtt:
     protocol: ws
-    host: 127.0.0.1
+    host: 0.0.0.0
     port: 9000
-    sameId: prevent
+    sameId: disconnect
     #sameId: prevent
 nats:
     host: 127.0.0.1
     port: 4222
     publish_mapping : |
-        (clientId,topic)=> `tenant1.clientPublish.${clientId.split(".")[0]}`
+        (clientId,topic)=> `tenant1.clientPublish.${clientId.split("-")[0]}`
     #timestamp : true
+    server_publish : "service1.serverPublish.*.*"
+    server_puback : "service1.serverPuback.*.*"
 service:
     #connect_authz: "device.connect"
     #publish_authz: "device.publish"

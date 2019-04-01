@@ -2,11 +2,16 @@
 const yaml = require('js-yaml');
 const path = require('path');
 const fs = require('fs');
-const ymlPath = 'device-broker.yml'
-
 
 var scriptname = path.basename(process.argv[1])
 console.log(`Script name : ${scriptname}`)
+var ymlPath
+if(process.argv[2]){
+    ymlPath = process.argv[2]
+}
+else{
+    ymlPath = 'device-broker.yml'
+}
 
 //Load configuration file
 const rawConfig = function () {
@@ -33,7 +38,9 @@ const schema = Joi.object().keys({
         host: Joi.string().ip().required(),
         port: Joi.number().port().required(),
         publish_mapping: Joi.string().required(),
-        timestamp: Joi.boolean().default(false)
+        timestamp: Joi.boolean().default(false),
+        server_publish: Joi.string(),
+        server_puback: Joi.string(),
     }).required(),
     service: Joi.object().keys({
         connect_authz: Joi.string(),
@@ -146,6 +153,7 @@ mqtt.connectAuthenticate = function (regex, delimiter, client, done) {
                 const res = JSON.parse(response)
                 if (res.status == 'OK') {
                     done(true)
+                    nc.publish(`${config.nats.rootTopic}.clientConnect`,client.clientId)
                 }
                 else {
                     done(false)
@@ -158,10 +166,11 @@ mqtt.connectAuthenticate = function (regex, delimiter, client, done) {
     }
     else {
         done(true)
+        nc.publish(`${config.nats.rootTopic}.clientConnect`,client.clientId)
         return
     }
 
-}.bind(this, new RegExp('^[a-zA-Z0-9-_]+$'), ".")
+}.bind(this, new RegExp('^[a-zA-Z0-9-_]+$'), "-")
 
 //set callback when client publish message
 var LRU = require("lru-cache")
@@ -184,7 +193,8 @@ mqtt.clientPublish = function (regex, delimiter, packet, client) {
         }
         let data = {
             topic: topic, payload: payload,
-            clientId: client.clientId
+            clientId: client.clientId,
+            username : client.username
         }
         if (config.nats.timestamp) {
             data.arrivalTimestamp = (new Date()).getTime()
@@ -230,16 +240,16 @@ mqtt.clientPublish = function (regex, delimiter, packet, client) {
         forward()
     }
 
-}.bind(this, new RegExp('^[a-zA-Z0-9-_]+$'), ".")
+}.bind(this, new RegExp('^[a-zA-Z0-9-_]+$'), "-")
 
 mqtt.clientDisconnect = function (client) {
-    nc.publish(`${config.nats.rootTopic}.clientDisconnect.${client.clientId}`)
+    nc.publish(`${config.nats.rootTopic}.clientDisconnect`,client.clientId)
 }
 
 //run the mqttserver
 mqtt.setup(function () {
     mqtt.run()
-    nc.subscribe(`${config.nats.rootTopic}.serverPublish.*.*`, function (msg, reply, subj) {
+    nc.subscribe(`${config.nats.server_publish}`, function (msg, reply, subj) {
         let topics = subj.split(".")
         let mqtttopic = topics[3] === undefined ? '' : topics[3]
         let clientId = topics[2]
@@ -247,7 +257,7 @@ mqtt.setup(function () {
         mqtt.publish(clientId, { topic: mqtttopic, payload: msg })
     })
 
-    nc.subscribe(`${config.nats.rootTopic}.serverPubAck.*.*`, function (msg, reply, subj) {
+    nc.subscribe(`${config.nats.server_puback}`, function (msg, reply, subj) {
         let topics = subj.split(".")
         let msgId = parseInt(topics[3])
         msgId = msgId === NaN ? 0 : msgId;
