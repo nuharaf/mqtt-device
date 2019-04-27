@@ -2,15 +2,17 @@
 const yaml = require('js-yaml');
 const path = require('path');
 const fs = require('fs');
+const argv = require('yargs').argv
 
 var scriptname = path.basename(process.argv[1])
 console.log(`Script name : ${scriptname}`)
-var ymlPath
-if(process.argv[2]){
-    ymlPath = process.argv[2]
+var ymlPath = 'device-broker.yml'
+if(argv.config == undefined){
+    console.log(`Using default config file : ${ymlPath}`)
 }
 else{
-    ymlPath = 'device-broker.yml'
+    ymlPath = argv.config
+    console.log(`Using config file : ${ymlPath}`)
 }
 
 //Load configuration file
