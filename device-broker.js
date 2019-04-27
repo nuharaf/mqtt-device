@@ -27,6 +27,7 @@ const rawConfig = function () {
     }
 }.call()
 
+
 //verify config
 const Joi = require('joi');
 const schema = Joi.object().keys({
@@ -50,7 +51,7 @@ const schema = Joi.object().keys({
     }).empty(null).default({}),
     logging: Joi.object().keys({
         level: Joi.string().required().valid("error", "warn", "info", "verbose", "debug", "silly"),
-        output: Joi.string().required()
+        output: Joi.string()
     }).required(),
     api: Joi.object().keys({
         port: Joi.number().port().required(),
@@ -77,11 +78,11 @@ var winston = require('winston')
 const logger = winston.createLogger({
     level: config.logging.level,
     format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
-    transports: [
-        new winston.transports.File({ filename: config.logging.output })
-    ]
+    transports: []
 });
-
+if(config.logging.output != undefined){
+    logger.add(new winston.transports.File({ filename: config.logging.output }));    
+}
 logger.add(new winston.transports.Console());
 
 //Setup conenction to NATS server
