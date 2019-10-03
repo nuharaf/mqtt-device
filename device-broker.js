@@ -29,7 +29,7 @@ const rawConfig = function () {
 
 
 //verify config
-const Joi = require('joi');
+const Joi = require('@hapi/joi');
 const schema = Joi.object().keys({
     mqtt: Joi.object().keys({
         protocol: Joi.string().required().valid("tcp", "tls", "ws", "wss"),

@@ -4,18 +4,9 @@
   "description": "",
   "main": "fp.js",
   "dependencies": {
-<<<<<<< HEAD
     "@hapi/joi": "^16.1.5",
-    "hapi-cors-headers": "^1.0.3",
-    "inert": "^5.1.2",
     "js-yaml": "^3.13.1",
     "lodash": "^4.17.15",
-=======
-    "@hapi/inert": "^5.2.2",
-    "@hapi/joi": "^16.0.1",
-    "js-yaml": "^3.12.0",
-    "lodash": "^4.17.11",
->>>>>>> 58d606612c9057f5f98e4aa84a8d1c127044adce
     "lru-cache": "^5.1.1",
     "mqtt": "^2.18.8",
     "mqtt-connection": "^4.0.0",
