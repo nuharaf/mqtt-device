@@ -17,7 +17,7 @@ service:
     #publish_authz: "device.publish"
 logging:
     level: silly
-    output : "device-broker.log"
+    # output : "device-broker.log"
 api:
     host: 127.0.0.1
     port: 9001

@@ -58,16 +58,13 @@ const schema = Joi.object().keys({
         host: Joi.string().ip().required()
     })
 })
-var config
-Joi.validate(rawConfig, schema, function (err, value) {
-    if (err) {
-        console.log("Invalid config")
-        console.log(err)
-        process.exit()
-    }
-    config = value
+const {error,value} = schema.validate(rawConfig)
+if(error){
+    console.log(error.toString)
+    process.exit()
+}
 
-})
+var config = value;
 
 const stringifyObject = require('stringify-object');
 console.log(stringifyObject(config))
